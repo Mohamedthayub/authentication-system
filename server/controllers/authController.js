@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jsonWebToken = require('jsonwebtoken');
 const  userModel = require('../models/userModel');
+const resend = require("../config/email");
 exports.register = async (req, res) => {
     const { name, email, password } = req.body;
 
@@ -52,12 +53,22 @@ exports.register = async (req, res) => {
                 : "strict",
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
+     
+        await resend.emails.send({
+            from: process.env.SENDER_EMAIL,
+            to: email,
+            subject: "Welcome!",
+            html: `
+                <h1>Welcome ${name}!</h1>
+                <p>Your account has been created successfully.</p>
+            `
+        });
 
-        // Send response
         return res.json({
             success: true,
             message: "User registered successfully"
         });
+        
 
     } catch (error) {
         console.error("Register error:", error);
@@ -68,7 +79,6 @@ exports.register = async (req, res) => {
         });
     }
 };
-
 exports.login = async (req,res) => {
     const {email,password} = req.body;
     if(!email || !password){
@@ -127,4 +137,82 @@ exports.logout = async (req,res) => {
             success:false,message:error.message
         });
     } 
+}
+
+exports.sendVerifyOtp = async (req,res) => {
+    try{
+        const {userId} = req.body;   
+        const user  =  await userModel.findById(userId);
+        if(!user.isAccountVerified){
+            return res.json({
+                success:false,
+                message:"Account Already  verified"
+            });
+        }
+        const otp  = String(Math.floor(100000 + Math.random() * 900000));
+        user.verifyOtp = otp;
+        user.verifyOtpExpireAt = Date.now() + 24 * 60 * 60 * 1000;
+        await  user.save();
+        
+        await resend.emails.send({
+            from: process.env.SENDER_EMAIL,
+            to: user.email,
+            subject: "Account Verfication OTP",
+            text:`your OTP is ${otp} Verify your account using this OTP`
+        });
+        res.json({
+            success:true,
+            message:"Verification OTP Sent on Email"
+        });
+    }
+    catch(error){
+        res.json({
+            success:false,
+            message:error.message
+        });
+    }
+}
+exports.verifyEmail = async (req,res) => {
+    const {userId,otp } = req.body;
+    if(!userId || !otp){
+        res.json({
+            success:false,
+            message:'Missing Details'
+        })
+    }
+    try{
+        const user = await userModel.findById(userId);
+        if(!user){
+            return res.json({
+                success:false,
+                message:'user not found'
+            });
+        }
+        if(user.verifyOtp === '' || user.verifyOtp !== otp){
+            return res.json({
+                success:false,
+                message:'Invalid OTP'
+            });
+        }
+        if(user.verifyOtpExpireAt < Date.now()){
+            return res.json({
+                success:false,
+                message:'OTP Expired'
+            });
+        }
+        user.isAccountVerified = true;
+        user.verifyOtp = '';
+        user.verifyOtpExpireAt = 0;
+        await user.save();
+        return res.json({
+            success:true,
+            message:'Email verified Successfully'
+        });
+    }
+    catch(error){
+        return res.json({
+            success:false,
+            message:error.message
+        })
+    }
 }

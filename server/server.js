@@ -18,6 +18,7 @@ app.use(cors({
 
 connectDB();
 
+
 // app.use()
 app.use('/api/auth',authRouter);
 
