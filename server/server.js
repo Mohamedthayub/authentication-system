@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const authRouter = require("./routes/authRoutes");
+const userRouter = require("./routes/userRoutes");
 require("dotenv").config();
 const cookieParser = require("cookie-parser");
 
@@ -21,6 +22,7 @@ connectDB();
 
 // app.use()
 app.use('/api/auth',authRouter);
+app.use('/api/user',userRouter);
 
 app.listen(port, () => {
     console.log(`Server started on PORT ${port}`);
